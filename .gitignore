@@ -1,0 +1,81 @@
+# Compiled output files
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.dylib
+*.a
+*.pyc
+*.pyd
+
+# IDE and editor files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln
+*.ncb
+*.sdf
+*.opensdf
+*.filters
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Dependency directories
+node_modules/
+vendor/
+Pods/
+
+# Logs and temporary files
+*.log
+*.tmp
+temp/
+tmp/
+logs/
+*.bak
+
+# Build output directories
+build/
+dist/
+out/
+target/
+
+# Package files
+*.egg-info/
+.env
+.venv/
+
+# Other common files
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.coverage
+coverage/
+
+# Python specific
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.egg
+*.whl
+*.manifest
+
+# python environment
+.venv/
+.env/
+.vllm/
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+.test/
+.test.py
