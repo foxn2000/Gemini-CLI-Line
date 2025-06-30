@@ -23,17 +23,22 @@ from linebot.v3.webhooks import (
     TextMessageContent
 )
 
+from src.llm_api import gemini_chat
+from src.history import save_history, load_history
+
 # .envファイルから環境変数を読み込む
 load_dotenv()
 
 # Flaskアプリケーションのインスタンスを作成
 app = Flask(__name__)
 
-# 環境変数からチャネルアクセストークンとチャネルシークレットを取得
-# 環境変数が設定されていない場合はエラーを発生させる
+# 環境変数から設定を読み込む
 channel_access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 channel_secret = os.getenv('LINE_CHANNEL_SECRET')
-if channel_access_token is None or channel_secret is None:
+system_prompt = os.getenv('SYSTEM_PROMPT', '応答の語尾は必ず「〜のだ」とすること。')
+context_time_limit_hours = int(os.getenv('CONTEXT_TIME_LIMIT_HOURS', 1))
+
+if not all([channel_access_token, channel_secret]):
     print("Error: LINE_CHANNEL_ACCESS_TOKEN or LINE_CHANNEL_SECRET is not set.")
     exit()
 
@@ -67,15 +72,39 @@ def callback():
 # テキストメッセージイベントを処理するハンドラ
 @handler.add(MessageEvent, message=TextMessageContent)
 def handle_message(event):
-    # 受け取ったテキストメッセージをそのまま返信する
-    reply_text = event.message.text
-    
-    line_bot_api.reply_message(
-        ReplyMessageRequest(
-            reply_token=event.reply_token,
-            messages=[TextMessage(text=reply_text)]
+    user_id = event.source.user_id
+    user_message = event.message.text
+
+    # 1. 会話履歴を読み込む
+    history = load_history(user_id, context_time_limit_hours)
+
+    # 2. 今回のユーザーメッセージを履歴に追加
+    history.append({"role": "user", "parts": [user_message]})
+
+    try:
+        # 3. Gemini APIを呼び出す
+        model_response = gemini_chat(history, system_prompt)
+
+        # 4. ユーザーに応答を送信
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text=model_response)]
+            )
         )
-    )
+
+        # 5. 今回のやり取りを保存
+        save_history(user_id, user_message, model_response)
+
+    except Exception as e:
+        app.logger.error(f"Error: {e}")
+        # エラーが発生したことをユーザーに通知（任意）
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=event.reply_token,
+                messages=[TextMessage(text="エラーが発生しました。")]
+            )
+        )
 
 # スクリプトが直接実行された場合にサーバーを起動
 if __name__ == "__main__":

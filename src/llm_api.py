@@ -12,8 +12,8 @@ import os
 from typing import Final
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+import google.generativeai as genai
+from google.generativeai.types import content_types
 
 # ---------------------------------------------------------------------------
 # ❶ 環境変数をロードし、API キーを取得
@@ -24,40 +24,44 @@ if _API_KEY is None:
     raise RuntimeError(
         "環境変数 GEMINI_API_KEY が見つかりません。.env に設定してください。"
     )
+genai.configure(api_key=_API_KEY)
 
 # ---------------------------------------------------------------------------
-# ❷ クライアントを生成（SDK が HTTP コネクションを内部で再利用）
+# ❷ シンプルなラッパー関数
 # ---------------------------------------------------------------------------
-_client: Final[genai.Client] = genai.Client(api_key=_API_KEY)
-
-# ---------------------------------------------------------------------------
-# ❸ シンプルなラッパー関数
-# ---------------------------------------------------------------------------
-def gemini_chat(prompt: str, /, *, model: str = "gemini-2.5-flash") -> str:
+def gemini_chat(
+    history: list[content_types.PartType],
+    system_prompt: str | None = None,
+    /,
+    *,
+    model: str = "gemini-1.5-flash",
+) -> str:
     """
-    Send a single prompt to Gemini and return the model's reply as plain text.
+    システムプロンプトと会話履歴を元に、Geminiからの応答を生成します。
 
     Parameters
     ----------
-    prompt : str
-        User message (one turn).
-    model : str, default "gemini-2.5-flash"
-        Gemini model ID. Change to "gemini-2.5-pro" 等で温度設定可。
+    history : list[dict[str, str]]
+        会話履歴のリスト。
+        例: [{"role": "user", "parts": ["..."]}, {"role": "model", "parts": ["..."]}]
+    system_prompt : str, optional
+        モデルに与えるシステムプロンプト, by default None
+    model : str, default "gemini-1.5-flash"
+        使用するGeminiモデルID。
 
     Returns
     -------
     str
-        Model reply.
+        モデルからの応答テキスト。
 
     Raises
     ------
     google.genai.types.GoogleGenAiError
-        On network / quota / safety errors, etc.
+        ネットワーク、割り当て、安全性エラーなどが発生した場合。
     """
-    response = _client.models.generate_content(
-        model=model,
-        contents=prompt,  # 単一テキストなのでそのまま渡す
-        # 例: config=types.GenerateContentConfig(max_output_tokens=1024)
+    chat_model = genai.GenerativeModel(
+        model_name=model,
+        system_instruction=system_prompt,
     )
-    # `response.text` は Google SDK が組み込みで提供
+    response = chat_model.generate_content(contents=history)
     return response.text
