@@ -71,11 +71,12 @@ __pycache__/
 *.manifest
 
 # python environment
-.venv/
-.env/
-.vllm/
+venv/
+env/
+vllm/
+
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints/
 
 .test/
-.test.py
+test.py
