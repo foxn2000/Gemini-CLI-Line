@@ -30,6 +30,9 @@
 - [Google AI CLI](https://github.com/google/generative-ai-cli)がインストールされ、`gemini`コマンドが利用可能であること。
 - LINE Developersアカウントと、Messaging APIのチャネルが作成済みであること。
 
+以下の記事を参考に、Line Botの設定を行ってください。
+https://qiita.com/Holy_fox/items/3c76118dc7c6d0da0748
+
 ### 2. リポジトリのクローンと依存関係のインストール
 
 ```bash
