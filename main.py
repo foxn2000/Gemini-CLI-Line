@@ -58,8 +58,19 @@ Create a file named 'hello.py' in the current directory.
 
 # ユーザーごとの作業ディレクトリを管理
 WORK_DIRECTORIES: dict[str, Path] = {}
-# デフォルトの作業ディレクトリ (このファイルの親ディレクトリ)
-DEFAULT_WORKDIR: Final[Path] = Path(__file__).parent.resolve()
+
+def get_default_workdir() -> Path:
+    """環境変数からデフォルトの作業ディレクトリを取得する"""
+    env_path = os.getenv("DEFAULT_WORKDIR")
+    if env_path:
+        path = Path(env_path).expanduser().resolve()
+        if path.is_dir():
+            return path
+    # 環境変数が未設定、またはパスが無効な場合は、このファイルの親ディレクトリを返す
+    return Path(__file__).parent.resolve()
+
+# デフォルトの作業ディレクトリ
+DEFAULT_WORKDIR: Final[Path] = get_default_workdir()
 
 # ---------------------------------------------------------------------------
 # LINE Webhookのハンドラ
@@ -94,19 +105,28 @@ def handle_message(event: MessageEvent) -> None:
         command = user_message[1:].strip()
         
         # `!cd` コマンドの特別処理
-        if command.startswith("cd "):
-            new_dir_str = command[3:].strip()
-            # パスのチルダを展開
-            new_dir = Path(new_dir_str).expanduser()
-            # 絶対パスでない場合は、現在の作業ディレクトリからの相対パスと見なす
-            if not new_dir.is_absolute():
-                new_dir = workdir / new_dir
-            
-            if new_dir.is_dir():
-                WORK_DIRECTORIES[user_id] = new_dir.resolve()
-                reply_text = f"作業ディレクトリが次に変更されました:\n{WORK_DIRECTORIES[user_id]}"
-            else:
-                reply_text = f"エラー: ディレクトリ '{new_dir}' が見つかりません。"
+        if command.startswith("cd"):
+            # `!cd` のみの場合、デフォルトの作業ディレクトリに戻す
+            if command == "cd":
+                WORK_DIRECTORIES[user_id] = DEFAULT_WORKDIR
+                reply_text = f"作業ディレクトリがデフォルトに戻りました:\n{DEFAULT_WORKDIR}"
+            # `!cd [path]` の場合
+            elif command.startswith("cd "):
+                new_dir_str = command[3:].strip()
+                # パスのチルダを展開
+                new_dir = Path(new_dir_str).expanduser()
+                # 絶対パスでない場合は、現在の作業ディレクトリからの相対パスと見なす
+                if not new_dir.is_absolute():
+                    new_dir = workdir / new_dir
+                
+                if new_dir.is_dir():
+                    WORK_DIRECTORIES[user_id] = new_dir.resolve()
+                    reply_text = f"作業ディレクトリが次に変更されました:\n{WORK_DIRECTORIES[user_id]}"
+                else:
+                    reply_text = f"エラー: ディレクトリ '{new_dir}' が見つかりません。"
+        # `!pwd` コマンドの処理
+        elif command == "pwd":
+            reply_text = f"現在の作業ディレクトリ:\n{workdir}"
         else:
             reply_text = execute_command(command, workdir)
     
