@@ -12,6 +12,7 @@ from linebot.v3.messaging import (
     ApiClient,
     MessagingApi,
     ReplyMessageRequest,
+    PushMessageRequest,
     TextMessage,
 )
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
@@ -129,41 +130,72 @@ def handle_message(event: MessageEvent) -> None:
             reply_text = f"現在の作業ディレクトリ:\n{workdir}"
         else:
             reply_text = execute_command(command, workdir)
+        
+        with ApiClient(config) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            line_bot_api.reply_message_with_http_info(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text=reply_text)],
+                )
+            )
     
     # それ以外はAIアシスタントとして応答
     else:
         history = load_history(user_id, hours_limit=12)
         ai_response = gemini_chat(history + [{"role": "user", "parts": [user_message]}], SYSTEM_PROMPT)
+        save_history(user_id, user_message, ai_response)
 
         # AIの応答からgemini-cliの呼び出しを抽出
         match = re.search(r"<gemini-cli>(.*?)</gemini-cli>", ai_response, re.DOTALL)
 
-        if match:
-            gemini_prompt = match.group(1).strip()
-            # AIの応答から<gemini-cli>タグ部分を削除して補足メッセージを取得
-            supplement_message = re.sub(r"<gemini-cli>.*?</gemini-cli>", "", ai_response, flags=re.DOTALL).strip()
-            
-            try:
-                cli_output = run_gemini(gemini_prompt, workdir)
-                reply_text = f"--- Gemini-CLI実行結果 ---\n{cli_output}"
-                if supplement_message:
-                    reply_text += f"\n\n--- AIからのメッセージ ---\n{supplement_message}"
-            except (FileNotFoundError, RuntimeError) as e:
-                reply_text = f"Gemini-CLIの実行中にエラーが発生しました:\n{e}"
-        else:
-            reply_text = ai_response
-        
-        save_history(user_id, user_message, ai_response)
+        with ApiClient(config) as api_client:
+            line_bot_api = MessagingApi(api_client)
+            if match:
+                gemini_prompt = match.group(1).strip()
+                # AIの応答から<gemini-cli>タグ部分を削除して補足メッセージを取得
+                supplement_message = re.sub(r"<gemini-cli>.*?</gemini-cli>", "", ai_response, flags=re.DOTALL).strip()
 
-    # LINEに応答を送信
-    with ApiClient(config) as api_client:
-        line_bot_api = MessagingApi(api_client)
-        line_bot_api.reply_message_with_http_info(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[TextMessage(text=reply_text)],
-            )
-        )
+                # 最初に補足メッセージを返信
+                if supplement_message:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[TextMessage(text=supplement_message)]
+                        )
+                    )
+
+                # Gemini-CLIを実行し、結果をプッシュメッセージで送信
+                try:
+                    cli_output = run_gemini(gemini_prompt, workdir)
+                    result_message = f"--- Gemini-CLI実行結果 ---\n{cli_output}"
+                except (FileNotFoundError, RuntimeError) as e:
+                    result_message = f"Gemini-CLIの実行中にエラーが発生しました:\n{e}"
+
+                # 補足メッセージがなかった場合はリプライトークンが消費されていないため、reply_messageで結果を送信
+                if not supplement_message:
+                    line_bot_api.reply_message(
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[TextMessage(text=result_message)]
+                        )
+                    )
+                # 補足メッセージを送信済みの場合は、push_messageで結果を送信
+                else:
+                    line_bot_api.push_message(
+                        PushMessageRequest(
+                            to=user_id,
+                            messages=[TextMessage(text=result_message)]
+                        )
+                    )
+            else:
+                # gemini-cli呼び出しがない場合は、通常通り応答
+                line_bot_api.reply_message_with_http_info(
+                    ReplyMessageRequest(
+                        reply_token=reply_token,
+                        messages=[TextMessage(text=ai_response)],
+                    )
+                )
 
 # ---------------------------------------------------------------------------
 # サーバーの起動
