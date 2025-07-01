@@ -39,7 +39,7 @@ def run_gemini(prompt: str, workdir: Optional[str | Path] = None) -> str:
             raise FileNotFoundError(f"workdir '{cwd}' is not an existing directory")
 
     # Build the argument list; using list form prevents shell injection
-    CMD: Final[list[str]] = ["gemini", "-p", prompt, "-y"]
+    CMD: Final[list[str]] = ["gemini", "-p", prompt, "--yolo"]
 
     try:
         completed = subprocess.run(
@@ -47,7 +47,9 @@ def run_gemini(prompt: str, workdir: Optional[str | Path] = None) -> str:
             capture_output=True,  # capture stdout/stderr
             text=True,            # decode bytes → str
             cwd=str(cwd) if cwd is not None else None,
-            check=False           # manual error handling
+            check=False,           # manual error handling
+            shell=True,         # shell=True for shell injection protection
+            encoding='utf-8',
         )
     except FileNotFoundError as exc:
         raise FileNotFoundError(
