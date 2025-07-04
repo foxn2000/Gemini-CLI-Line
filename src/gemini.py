@@ -48,7 +48,7 @@ def run_gemini(prompt: str, workdir: Optional[str | Path] = None) -> str:
             text=True,            # decode bytes → str
             cwd=str(cwd) if cwd is not None else None,
             check=False,           # manual error handling
-            shell=True,         # shell=True for shell injection protection
+            shell=False,
             encoding='utf-8',
         )
     except FileNotFoundError as exc:
